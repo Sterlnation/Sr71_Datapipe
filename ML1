@@ -1,0 +1,60 @@
+import requests
+from bs4 import BeautifulSoup
+import csv
+import sqlite3
+
+def get_page_content(url):
+    response = requests.get(url)
+    return response.content
+
+def extract_data(html):
+    soup = BeautifulSoup(html, 'html.parser')
+    
+    title = soup.title.text
+    headings = [h.text for h in soup.find_all('h1') if 'Contents' not in h.text]
+    paragraphs = [p.text for p in soup.find_all('p')]
+
+    return title, headings, paragraphs
+
+def save_data(data, filename):
+    with open(filename, 'w', newline='') as file:
+        writer = csv.writer(file)
+        for row in data:
+            writer.writerow(row)
+
+def save_data_to_db(data, db_name):
+    conn = sqlite3.connect(db_name)
+    cursor = conn.cursor()
+
+    title, headings, paragraphs = data
+    
+    cursor.execute('''CREATE TABLE IF NOT EXISTS data (
+                title TEXT,
+                heading TEXT,
+                paragraph TEXT
+            )''')
+
+    for heading in headings:
+        for paragraph in paragraphs:
+            cursor.execute("INSERT INTO data VALUES (?, ?, ?)", (title, heading, paragraph))
+
+    conn.commit()
+    conn.close()
+
+def crawl_urls(urls):
+    for url in urls:
+        html = get_page_content(url)
+        title, headings, paragraphs = extract_data(html)
+        
+        save_data((title, headings, paragraphs), 'output.txt')
+        save_data_to_db((title, headings, paragraphs), 'scrape.db')
+
+if __name__ == '__main__':
+    urls = [
+        'https://en.wikipedia.org/wiki/Machine_learning',
+        'https://en.wikipedia.org/wiki/Data_mining',
+        'https://en.wikipedia.org/wiki/Deep_learning'
+    ]
+    crawl_urls(urls)
+
+print("Data collection complete")
